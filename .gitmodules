@@ -1,0 +1,3 @@
+[submodule "djattendance_repo"]
+	path = djattendance_repo
+	url = https://github.com/attendanceproject/djattendance.git
