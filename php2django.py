@@ -5,6 +5,7 @@ import os
 import pickle
 import re
 import sys
+import traceback
 import types
 
 #You should create a local_settings.py file for your django settings
@@ -18,8 +19,8 @@ from django.conf import settings
 
 #local_settings.py should be of the form:
 #  
-# mysql_params =
-# {'host':  "", # your host, usually localhost
+# mysql_params = {
+#  'host':  "", # your host, usually localhost
 #  'user':  "", # your username
 #  'passwd':"", # your password
 #  'db':    ""} # the database name
@@ -34,18 +35,27 @@ cur = db.cursor()
 from accounts.models import User, Trainee, TrainingAssistant
 
 # from http://stackoverflow.com/a/13653312/1549171
-def absModule(o):
+def absModuleInstance(o):
     module = o.__class__.__module__
     if module is None or module == str.__class__.__module__:
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
 
+def absModule(o):
+    module = o.__module__
+    if module is None or module == str.__class__.__module__:
+        return o.__name__
+    return module + '.' + o.__name__
+
 ignore = re.compile('^__.*__$')
 class importTemplate:
     keyMap={}
+    
+    def rowFilter(self,row):
+        return True
             
     def getPickleFileName(self):
-        return '%.pickle' % (absModule(self.model))
+        return '%s.pickle' % (absModule(self.model))
     
     def saveKeyMap(self):
         filename = self.getPickleFileName() 
@@ -84,7 +94,12 @@ class importTemplate:
     def doImport(self):
         cur.execute(self.query)
         result = cur.fetchall()
-        for row in result:
-            self.importRow(row)
+        try:
+            for row in result:
+                if self.rowFilter(row):
+                    self.importRow(row)
+        except Exception:
+            traceback.print_exc()
+            
         self.saveKeyMap()
 

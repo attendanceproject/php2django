@@ -17,7 +17,7 @@ from accounts.models import User, Trainee, TrainingAssistant
 
 nonNumberRegex = re.compile('[^0-9]*')
 
-#from stackoverflow: http://stackoverflow.com/questions/3217682/checking-validity-of-email-in-django-python
+# from http://stackoverflow.com/a/3218128/1549171
 def validateEmail( email ):
     from django.core.validators import validate_email
     from django.core.exceptions import ValidationError
@@ -28,10 +28,29 @@ def validateEmail( email ):
         return False
 
 class importUser(php2django.importTemplate):
+    # Required: the django model to import to
     model=User
+    # Required: the mysql query for retrieving the rows to map to model instances
     query='SELECT * FROM user'
-    key=1
+    # Optional: the index of the primary key
+    key=0
     
+    # Optional function: Return True for rows to import.
+    #     Return False if the row should be skipped.
+    def rowFilter(self,row):
+        if row[15]=='New Jerusalem':
+            return False
+        return True
+    
+    # Required: a nested class which has attributes or functions which
+    #     correspond to the attributes of the django model.
+    #     
+    #     The attributes should be set to the index of the row which contains
+    #     the value to use for the attribute with the same name in the django 
+    #     model.
+    #     
+    #     The functions accept the query result row being imported so they can
+    #     return the value django will use in the model instance.
     class mapping:
         firstname=3
         nickname=4
