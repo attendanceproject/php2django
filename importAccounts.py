@@ -27,7 +27,7 @@ def validateEmail( email ):
     except ValidationError:
         return False
 
-class importUser(php2django.importTemplate):
+class ImportUser(php2django.ImportTemplate):
     # Required: the django model to import to
     model=User
     # Required: the mysql query for retrieving the rows to map to model instances
@@ -37,8 +37,8 @@ class importUser(php2django.importTemplate):
     
     # Optional function: Return True for rows to import.
     #     Return False if the row should be skipped.
-    def rowFilter(self,row):
-        if row[15]=='New Jerusalem':
+    def row_filter(self,row):
+        if row[15]=='New Jerusalem': # remove short termers
             return False
         return True
     
@@ -89,10 +89,61 @@ class importUser(php2django.importTemplate):
         def last_login(self,row):
             # minimum date value if lastlogin is none
             return datetime.min if row[22] is None else row[22]
+
+# Depends on User and TA, TODO the rest of dependencies. It is dependent on it
+# self which means it will require a two-pass import
+# TODO
+class ImportTrainingAssistant(php2django.ImportTemplate):
+    model=TrainingAssistant
+    query='SELECT * FROM trainingAssistant'
+    # ID, userID, lastName, firstName, middleName, birthDate, active,
+    # maritalStatus, residence, outOfTown, approvingTAID
+    key=0
+
+# Depends on User and TA, TODO the rest of dependencies. It is dependent on it
+# self which means it will require a two-pass import
+# TODO
+class ImportTrainee(php2django.ImportTemplate):
+    model=Trainee
+    #TODO fix/write this query
+    query='SELECT user_id as uid FROM trainee UNION SELECT user_id FROM trainee_old ORDER BY uid'
+    key=0
+    
+    class mapping:
+        account = -1 # user_id
+        active = -1 # is_active
+        #date_created
+        type = -1 #('R', 'Regular (full-time)'),('S', 'Short-term (long-term)'),
+                #('C', 'Commuter')
+        term = -1 #models.ManyToManyField(Term, null=True)
+        date_begin = -1
+        date_end = -1
+
+        TA = -1 #models.ForeignKey(TrainingAssistant, null=True, blank=True)
+        #requires second pass
+        mentor = -1 #models.ForeignKey('self', related_name='mentee', null=True,
+
+        #locality = models.ManyToManyField(Locality)
+        team = -1 #models.ForeignKey(Team, null=True, blank=True)
+        house = -1 #models.ForeignKey(House, null=True, blank=True)
+        bunk = -1 #models.ForeignKey(Bunk, null=True, blank=True)
+
+        # personal information
+        married = -1 #models.BooleanField(default=False)
+        spouse = -1 #models.OneToOneField('self', null=True, blank=True)
+        # refers to the user's home address, not their training residence
+        address = -1 #models.ForeignKey(Address, null=True, blank=True, verbose_name='home address')
+
+        # flag for trainees taking their own attendance
+        # this will be false for 1st years and true for 2nd with some exceptions.
+        self_attendance = -1 #models.BooleanField(default=False)
         
-#         def functionTest(self,queryResult):
-#             return str(queryResult)
+
 
 if __name__== "__main__":
-    temp = importUser()
-    temp.doImport()
+    #temp = ImportUser()
+    #temp.doImport()
+    
+    manager = php2django.ImportManager()
+    manager.build_lookup_table()
+    manager.process_imports()

@@ -10,13 +10,14 @@ import types
 
 # You should create a local.py file for your django settings in the djattendance
 # submodule.
-settingsPath = "ap.settings.local"
+settings_path = "ap.settings.local"
 
 #Add the djattendance submodule to the search path for Python modules 
 sys.path.insert(0, os.path.abspath(os.path.join('djattendance_repo','ap')))
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", settingsPath)
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_path)
 from django.conf import settings
+from django.db.models.fields import related
 
 #local_settings.py should be of the form:
 #  
@@ -49,26 +50,27 @@ def absModule(o):
     return module + '.' + o.__name__
 
 ignore = re.compile('^__.*__$')
-class importTemplate:
-    keyMap={}
+class ImportTemplate(object):
+    # TODO if this is going to be used for generic migrations it should probably be converted to an abstract class
+    key_map={}
     
-    def rowFilter(self,row):
+    def row_filter(self,row):
         return True
             
-    def getPickleFileName(self):
+    def get_pickle_file_name(self):
         return '%s.pickle' % (absModule(self.model))
     
-    def saveKeyMap(self):
-        filename = self.getPickleFileName() 
+    def save_key_map(self):
+        filename = self.get_pickle_file_name() 
         with open(filename,'wb') as outfile:
-            pickle.dump(self.keyMap, outfile)
+            pickle.dump(self.key_map, outfile)
             
-    def loadKeyMap(self):
-        filename = self.getPickleFileName()
+    def load_key_map(self):
+        filename = self.get_pickle_file_name()
         with open(filename,'rb') as infile:
-            self.keyMap = pickle.load(infile)
+            self.key_map = pickle.load(infile)
     
-    def importRow(self,row):
+    def import_row(self,row,**kargs):
         param = {}
         pk = None
         key = None
@@ -81,8 +83,8 @@ class importTemplate:
                 key = self.key(row)
             else:
                 key = row[self.key]
-            if key in self.keyMap:
-                pk = self.keyMap[key]
+            if key in self.key_map:
+                pk = self.key_map[key]
         
         # Use the mapping attributes and functions to convert the query row into
         # a model instance.
@@ -97,27 +99,28 @@ class importTemplate:
         print param
         
         # If an instance doesn't already exist create a new one and update the
-        # keyMap which stores the primary key relationship between the old
+        # key_map which stores the primary key relationship between the old
         # models and the new models
         if pk is None:
-            modelInstance = self.model.objects.create(**param)
-            modelInstance.save()
+            model_instance = self.model.objects.create(**param)
+            model_instance.save()
             if not key is None:
-                self.keyMap[key]=modelInstance.pk
+                self.key_map[key]=model_instance.pk
         else:
-            modelInstance = self.model.objects.get(pk=pk)
+            model_instance = self.model.objects.get(pk=pk)
             for prop, value in param.iteritems():
-                modelInstance.__dict__[prop]=value
-            modelInstance.save()
+                model_instance.__dict__[prop]=value
+            model_instance.save()
             
-        print modelInstance
+        print model_instance
         #except Exception, exp:
         #    print exp
     
-    def doImport(self):
+    #kargs should contain key maps to foreign keys
+    def doImport(self,**kargs):
         # load key map if it exists
-        if os.path.isfile(self.getPickleFileName()):
-            self.loadKeyMap()
+        if os.path.isfile(self.get_pickle_file_name()):
+            self.load_key_map()
         
         # Execute the mysql query and process the results
         cur.execute(self.query)
@@ -125,12 +128,48 @@ class importTemplate:
         try:
             for row in result:
                 # apply the row filter to check whether or not to import the row
-                if self.rowFilter(row):
+                if self.row_filter(row):
                     # import the row based on self.mapping
-                    self.importRow(row)
-        except Exception as e: # Exceptions are caught so the keyMap can be saved
-            self.saveKeyMap()
+                    self.import_row(row,**kargs)
+        # Exceptions are caught so the key_map can be saved
+        except Exception as e:
+            self.save_key_map()
             raise e
         
-        self.saveKeyMap()
+        self.save_key_map()
+    
+class ImportManager:
+    import_lookup = {}
+    finished_imports = set()
 
+    def build_lookup_table(self,skip_if_pickle=False):
+        for import_class in ImportTemplate.__subclasses__():
+            model_name = absModule(import_class.model)
+            import_instance = import_class()
+            self.import_lookup[model_name] = import_instance 
+            if skip_if_pickle and os.path.isfile(self.get_pickle_file_name()):
+                self.load_key_map()
+                self.finished_imports.add(model_name)
+    
+    def process_import(self,model_name):
+        double_import = False
+        self.finished_imports.add(model_name)
+        import_instance = self.import_lookup[model_name]
+        for attr in import_instance.model.__dict__.itervalues():
+            if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
+                print "FK", absModule(attr.field.rel.to)
+                #TODO write this
+            if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
+                print "FKM2M", absModule(attr.field.rel.to)
+                #TODO write this
+        
+    
+    def process_imports(self):
+        for model_name in self.import_lookup.iterkeys():
+            if model_name in self.finished_imports: continue
+            print model_name
+            self.process_import(model_name)
+        
+        
+        
+        
