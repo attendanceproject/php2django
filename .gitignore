@@ -63,3 +63,4 @@ docs/_build/
 .pydevproject
 .project
 *.pickle
+local_settings.py

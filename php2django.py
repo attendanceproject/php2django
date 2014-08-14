@@ -7,18 +7,25 @@ import re
 import sys
 import types
 
-if __name__== "__main__":
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
-
+#You should create a local_settings.py file for your django settings
 settingsPath = "ap.settings.local"
+
+#Add the djattendance submodule to the search path for Python modules 
+sys.path.insert(0, os.path.abspath(os.path.join('djattendance_repo','ap')))
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", settingsPath)
 from django.conf import settings
 
-
-db = MySQLdb.connect(host="localhost", # your host, usually localhost
-                     user="Monitor", # your username
-                      passwd="man2god", # your password
-                      db="officedb") # name of the data base
+#local_settings.py should be of the form:
+#  
+# mysql_params =
+# {'host':  "", # your host, usually localhost
+#  'user':  "", # your username
+#  'passwd':"", # your password
+#  'db':    ""} # the database name
+#
+from local_settings import mysql_params
+db = MySQLdb.connect(**mysql_params) # name of the data base
 
 # you must create a Cursor object. It will let
 #  you execute all the queries you need
@@ -26,13 +33,29 @@ cur = db.cursor()
 
 from accounts.models import User, Trainee, TrainingAssistant
 
-# if __name__== "__main__":
-print User.objects.all()
+# from http://stackoverflow.com/a/13653312/1549171
+def absModule(o):
+    module = o.__class__.__module__
+    if module is None or module == str.__class__.__module__:
+        return o.__class__.__name__
+    return module + '.' + o.__class__.__name__
 
 ignore = re.compile('^__.*__$')
 class importTemplate:
     keyMap={}
+            
+    def getPickleFileName(self):
+        return '%.pickle' % (absModule(self.model))
     
+    def saveKeyMap(self):
+        filename = self.getPickleFileName() 
+        with open(filename,'wb') as outfile:
+            pickle.dump(self.keyMap, outfile)
+            
+    def loadKeyMap(self):
+        filename = self.getPickleFileName()
+        with open(filename,'rb') as infile:
+            self.keyMap = pickle.load(infile)
     
     def importRow(self,row):
         #try:
@@ -49,7 +72,7 @@ class importTemplate:
         modelInstance = self.model.objects.create(**param)
         modelInstance.save()
         if not self.key is None:
-            if isinstance(self.key,type.FunctionType):
+            if isinstance(self.key,types.FunctionType):
                 key = self.key(row)
             else:
                 key = row[self.key]
@@ -63,55 +86,5 @@ class importTemplate:
         result = cur.fetchall()
         for row in result:
             self.importRow(row)
-            break;
-        print self.keyMap
+        self.saveKeyMap()
 
-# unpack args dict: function(**dictname)
-# list: function(*listname)
-
-# Use all the SQL you like
-'''
-cur.execute("SELECT * FROM user ")
-
-num_fields = len(cur.description)
-field_names = [i[0] for i in cur.description]
-f=open('phpdata','w')
-g=open('userdictionary', 'w')
-
-for aName in field_names :
-    f.write(' '.join(str(anID) for anID in aName) + '\n')
-
-length = 0
-inclusive = cur.fetchall()
-
-for row in inclusive :
-    length+=1;
-    f.write(' '.join(str(onetuple) for onetuple in row) + '\n')
-
-keys = field_names
-values = []
-madeList = []
-overallList = []
-dummyDict = []
-
-for n in range(0,length-1):
-    
-    for indexKey in range(0,num_fields-1):
-        values.append(inclusive[n][indexKey])
-    
-    dummyDict = dict(zip(keys,values))
-    madeList.append(dummyDict)
-    overallList.append(madeList)
-    values = []
-    madeList =[]
-
-output = open('userphp.pickle','wb')
-pickle.dump(overallList, output)
-output.close()
-
-reading = open('userphp.pickle', 'rb')
-userinfo = pickle.load(reading)
-print userinfo
-
-g.write(' '.join(str(atuple) for atuple in userinfo) + '\n')
-'''
