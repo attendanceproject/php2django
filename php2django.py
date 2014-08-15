@@ -141,9 +141,16 @@ class ImportTemplate(object):
 class ImportManager:
     import_lookup = {}
     finished_imports = set()
+    
+    # these are cleared by calling process_imports
+    queued_imports = set()
+    # dependency loop detection
+    warning_list = []
 
-    def build_lookup_table(self,skip_if_pickle=False):
-        for import_class in ImportTemplate.__subclasses__():
+    def build_lookup_table(self,class_list=[],skip_if_pickle=False):
+        if class_list == []:
+            class_list = ImportTemplate.__subclasses__()
+        for import_class in class_list:
             model_name = absModule(import_class.model)
             import_instance = import_class()
             self.import_lookup[model_name] = import_instance 
@@ -153,22 +160,54 @@ class ImportManager:
     
     def process_import(self,model_name):
         double_import = False
-        self.finished_imports.add(model_name)
-        import_instance = self.import_lookup[model_name]
-        for attr in import_instance.model.__dict__.itervalues():
-            if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
-                print "FK", absModule(attr.field.rel.to)
-                #TODO write this
-            if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
-                print "FKM2M", absModule(attr.field.rel.to)
-                #TODO write this
+        self.queued_imports.add(model_name)
+        try:
+            import_instance = self.import_lookup[model_name]
+            key_map_args={}
+            for attr in import_instance.model.__dict__.itervalues():
+                if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
+                    fk_model = absModule(attr.field.rel.to)
+                    print "FK", fk_model
+                    if fk_model not in self.finished_imports:
+                        if fk_model in self.queued_imports:
+                            if fk_model == model_name:
+                                double_import=True
+                            else: #handle loops
+                                self.warning_list.append(model_name)
+                        else:
+                            self.process_import(fk_model)
+                    key_map_args[fk_model]=self.import_lookup[fk_model].key_map
+                    #TODO write this
+                if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
+                    print "FKM2M", absModule(attr.field.rel.to)
+                    #TODO write this
+            import_instance.doImport(**key_map_args)
+            self.queued_imports.remove(model_name)
+            self.finished_imports.add(model_name)
+            
+            #handle links to self
+            if double_import:
+                key_map_args[model_name]=import_instance.key_map
+                import_instance.doImport(**key_map_args)
+        except KeyError as ke:
+            raise Exception("Unimplemented import template for: %s" % (model_name))
         
-    
-    def process_imports(self):
-        for model_name in self.import_lookup.iterkeys():
+    def process_imports(self,import_list=[]):
+        self.queued_imports = set()
+        self.warning_list = []
+        
+        if import_list==[]:
+            import_list=self.import_lookup.iterkeys()
+        for model_name in import_list:
             if model_name in self.finished_imports: continue
             print model_name
             self.process_import(model_name)
+        
+        #clean up the mess caused by foreign key reference loops
+        for model_name in self.warning_list:
+            self.process_import(model_name)
+        
+        self.warning_list = []
         
         
         

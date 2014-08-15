@@ -141,9 +141,7 @@ class ImportTrainee(php2django.ImportTemplate):
 
 
 if __name__== "__main__":
-    #temp = ImportUser()
-    #temp.doImport()
     
     manager = php2django.ImportManager()
-    manager.build_lookup_table()
+    manager.build_lookup_table(class_list=[ImportUser])
     manager.process_imports()
