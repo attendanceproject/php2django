@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 import os
 import re
@@ -6,14 +5,9 @@ import sys
 
 from datetime import datetime
 
-if __name__== "__main__":
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
-
 from php2django import php2django
 
 from accounts.models import User, Trainee, TrainingAssistant
-
-
 
 nonNumberRegex = re.compile('[^0-9]*')
 
@@ -138,10 +132,3 @@ class ImportTrainee(php2django.ImportTemplate):
         # this will be false for 1st years and true for 2nd with some exceptions.
         self_attendance = -1 #models.BooleanField(default=False)
         
-
-
-if __name__== "__main__":
-    
-    manager = php2django.ImportManager()
-    manager.build_lookup_table(class_list=[ImportUser])
-    manager.process_imports()
