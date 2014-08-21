@@ -52,14 +52,14 @@ class ImportUser(php2django.ImportTemplate):
         middlename=6
         maidenname=7
         date_of_birth=8
-        def gender(self,row):
+        def gender(self,row,**kargs):
             if row[9]=='M':
                 return 'B' 
             if row[9]=='F':
                 return 'S'
             raise ValueError('gender: %s' % (row[9]))
         #is_active=17
-        def is_active(self,row):
+        def is_active(self,row,**kargs):
             if not row[17] is None:
                 return row[17]
             return False
@@ -71,7 +71,7 @@ class ImportUser(php2django.ImportTemplate):
             if not cellPhone is None:
                 return homePhone
             return ''
-        def email(self,row):
+        def email(self,row,**kargs):
             if not row[22] is None and validateEmail(row[22]):
                 return row[22]
             # username if email is none otherwise email
@@ -80,7 +80,7 @@ class ImportUser(php2django.ImportTemplate):
                 if validateEmail(email):
                     return email
             return '%s@noemail.com' % (row[0])
-        def last_login(self,row):
+        def last_login(self,row,**kargs):
             # minimum date value if lastlogin is none
             return datetime.min if row[22] is None else row[22]
 
@@ -99,8 +99,7 @@ class ImportTrainingAssistant(php2django.ImportTemplate):
 # TODO
 class ImportTrainee(php2django.ImportTemplate):
     model=Trainee
-    #TODO fix/write this query
-    query='SELECT user_id as uid FROM trainee UNION SELECT user_id FROM trainee_old ORDER BY uid'
+    query='SELECT * FROM trainee'
     key=0
     
     class mapping:
@@ -109,7 +108,7 @@ class ImportTrainee(php2django.ImportTemplate):
         #date_created
         type = -1 #('R', 'Regular (full-time)'),('S', 'Short-term (long-term)'),
                 #('C', 'Commuter')
-        term = -1 #models.ManyToManyField(Term, null=True)
+        #term = -1 #models.ManyToManyField(Term, null=True)
         date_begin = -1
         date_end = -1
 
@@ -118,15 +117,15 @@ class ImportTrainee(php2django.ImportTemplate):
         mentor = -1 #models.ForeignKey('self', related_name='mentee', null=True,
 
         #locality = models.ManyToManyField(Locality)
-        team = -1 #models.ForeignKey(Team, null=True, blank=True)
-        house = -1 #models.ForeignKey(House, null=True, blank=True)
-        bunk = -1 #models.ForeignKey(Bunk, null=True, blank=True)
+        #team = -1 #models.ForeignKey(Team, null=True, blank=True)
+        #house = -1 #models.ForeignKey(House, null=True, blank=True)
+        #bunk = -1 #models.ForeignKey(Bunk, null=True, blank=True)
 
         # personal information
         married = -1 #models.BooleanField(default=False)
         spouse = -1 #models.OneToOneField('self', null=True, blank=True)
         # refers to the user's home address, not their training residence
-        address = -1 #models.ForeignKey(Address, null=True, blank=True, verbose_name='home address')
+        # address = -1 #models.ForeignKey(Address, null=True, blank=True, verbose_name='home address')
 
         # flag for trainees taking their own attendance
         # this will be false for 1st years and true for 2nd with some exceptions.

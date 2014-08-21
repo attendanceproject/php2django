@@ -80,7 +80,7 @@ class ImportTemplate(object):
         # Get old primary key and see if it already has a corresponding new key
         if not self.key is None:
             if isinstance(self.key,types.FunctionType):
-                key = self.key(row)
+                key = self.key(row,**kargs)
             else:
                 key = row[self.key]
             if key in self.key_map:
@@ -94,7 +94,15 @@ class ImportTemplate(object):
                 if isinstance(var,types.FunctionType):
                     param[prop]=var(self.mapping,row)
                 else:
-                    param[prop]=row[var]
+                    # if it is a foreign key use the key_map to look it up
+                    if isinstance(self.model.__dict__[prop],
+                                  related.ReverseSingleRelatedObjectDescriptor):
+                        if prop in kargs and row[var] in kargs[prop]:
+                            param[prop]=kargs[prop][row[var]]
+                        else:
+                            sys.stderr("WARNING: missing foreign key! %s\n" % (absModule(self.Model)));
+                    else:
+                        param[prop]=row[var]
                     
         print param
         
@@ -158,7 +166,7 @@ class ImportManager:
                 self.load_key_map()
                 self.finished_imports.add(model_name)
     
-    def process_import(self,model_name):
+    def process_import(self,model_name,mock=False):
         double_import = False
         self.queued_imports.add(model_name)
         try:
@@ -167,32 +175,34 @@ class ImportManager:
             for attr in import_instance.model.__dict__.itervalues():
                 if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
                     fk_model = absModule(attr.field.rel.to)
-                    print "FK", fk_model
+                    print model_name, "FK", fk_model
                     if fk_model not in self.finished_imports:
                         if fk_model in self.queued_imports:
                             if fk_model == model_name:
                                 double_import=True
                             else: #handle loops
                                 self.warning_list.append(model_name)
+                        elif fk_model in self.import_lookup:
+                            self.process_import(fk_model,mock=mock)
                         else:
-                            self.process_import(fk_model)
+                            sys.stderr.write('WARNING: Unimplemented import template for: %s (ref:%s)\n' % (fk_model,model_name))
+                            continue
                     key_map_args[fk_model]=self.import_lookup[fk_model].key_map
-                    #TODO write this
                 if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
-                    print "FKM2M", absModule(attr.field.rel.to)
+                    print model_name, "FKM2M", absModule(attr.field.rel.to)
                     #TODO write this
-            import_instance.doImport(**key_map_args)
+            if mock==False: import_instance.doImport(**key_map_args)
             self.queued_imports.remove(model_name)
             self.finished_imports.add(model_name)
             
             #handle links to self
             if double_import:
                 key_map_args[model_name]=import_instance.key_map
-                import_instance.doImport(**key_map_args)
+                if mock==False: import_instance.doImport(**key_map_args)
         except KeyError as ke:
             raise Exception("Unimplemented import template for: %s" % (model_name))
         
-    def process_imports(self,import_list=[]):
+    def process_imports(self,import_list=[],mock=False):
         self.queued_imports = set()
         self.warning_list = []
         
@@ -200,12 +210,11 @@ class ImportManager:
             import_list=self.import_lookup.iterkeys()
         for model_name in import_list:
             if model_name in self.finished_imports: continue
-            print model_name
-            self.process_import(model_name)
+            self.process_import(model_name,mock=mock)
         
         #clean up the mess caused by foreign key reference loops
         for model_name in self.warning_list:
-            self.process_import(model_name)
+            self.process_import(model_name,mock=mock)
         
         self.warning_list = []
         

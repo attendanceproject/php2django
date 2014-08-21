@@ -16,5 +16,9 @@ import importAccounts
 
 if __name__== "__main__":
     manager = php2django.ImportManager()
-    manager.build_lookup_table([importAccounts.ImportUser])
-    manager.process_imports()
+    manager.build_lookup_table([
+         importAccounts.ImportUser,
+         importAccounts.ImportTrainee,
+         importAccounts.ImportTrainingAssistant,
+    ])
+    manager.process_imports(mock=True)
