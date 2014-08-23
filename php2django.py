@@ -37,28 +37,35 @@ cur = db.cursor()
 from accounts.models import User, Trainee, TrainingAssistant
 
 # from http://stackoverflow.com/a/13653312/1549171
-def absModuleInstance(o):
+def abs_module_instance(o):
     module = o.__class__.__module__
     if module is None or module == str.__class__.__module__:
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
 
-def absModule(o):
+def abs_module(o):
     module = o.__module__
     if module is None or module == str.__class__.__module__:
         return o.__name__
     return module + '.' + o.__name__
+
+def lookup_pk(module,old_key,**kargs):
+    module_name = module if isinstance(module,str) else abs_module(module)
+    try:
+        return kargs[module_name].key_map[old_key]
+    except KeyError:
+        return None
 
 ignore = re.compile('^__.*__$')
 class ImportTemplate(object):
     # TODO if this is going to be used for generic migrations it should probably be converted to an abstract class
     key_map={}
     
-    def row_filter(self,row):
+    def row_filter(self,row,**kargs):
         return True
             
     def get_pickle_file_name(self):
-        return '%s.pickle' % (absModule(self.model))
+        return '%s.pickle' % (abs_module(self.model))
     
     def save_key_map(self):
         filename = self.get_pickle_file_name() 
@@ -68,7 +75,7 @@ class ImportTemplate(object):
     def load_key_map(self):
         filename = self.get_pickle_file_name()
         with open(filename,'rb') as infile:
-            self.key_map = pickle.load(infile)
+            self.key_map = pickle.load(infile)        
     
     def import_row(self,row,**kargs):
         param = {}
@@ -92,15 +99,18 @@ class ImportTemplate(object):
             if not ignore.match(prop):
                 var = self.mapping.__dict__[prop]
                 if isinstance(var,types.FunctionType):
-                    param[prop]=var(self.mapping,row)
+                    param[prop]=var(self.mapping,row,**kargs)
                 else:
                     # if it is a foreign key use the key_map to look it up
-                    if isinstance(self.model.__dict__[prop],
-                                  related.ReverseSingleRelatedObjectDescriptor):
-                        if prop in kargs and row[var] in kargs[prop]:
-                            param[prop]=kargs[prop][row[var]]
+                    if prop in self.model.__dict__ and \
+                            isinstance(self.model.__dict__[prop],
+                            related.ReverseSingleRelatedObjectDescriptor):
+                        f_model = self.model.__dict__[prop].field.rel.to
+                        fk_model = abs_module(f_model)
+                        if fk_model in kargs and row[var] in kargs[fk_model].key_map:
+                            param[prop]=f_model.objects.get(pk=kargs[fk_model].key_map[row[var]])
                         else:
-                            sys.stderr("WARNING: missing foreign key! %s\n" % (absModule(self.Model)));
+                            sys.stderr.write("WARNING: missing foreign key! %s\n" % (abs_module(self.model)));
                     else:
                         param[prop]=row[var]
                     
@@ -136,12 +146,13 @@ class ImportTemplate(object):
         try:
             for row in result:
                 # apply the row filter to check whether or not to import the row
-                if self.row_filter(row):
+                if self.row_filter(row,**kargs):
                     # import the row based on self.mapping
                     self.import_row(row,**kargs)
         # Exceptions are caught so the key_map can be saved
         except Exception as e:
             self.save_key_map()
+            traceback.print_exc()
             raise e
         
         self.save_key_map()
@@ -159,7 +170,7 @@ class ImportManager:
         if class_list == []:
             class_list = ImportTemplate.__subclasses__()
         for import_class in class_list:
-            model_name = absModule(import_class.model)
+            model_name = abs_module(import_class.model)
             import_instance = import_class()
             self.import_lookup[model_name] = import_instance 
             if skip_if_pickle and os.path.isfile(self.get_pickle_file_name()):
@@ -171,10 +182,12 @@ class ImportManager:
         self.queued_imports.add(model_name)
         try:
             import_instance = self.import_lookup[model_name]
-            key_map_args={}
+            kargs={}
+            kargs[model_name]=import_instance
+            dependencies=[]
             for attr in import_instance.model.__dict__.itervalues():
                 if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
-                    fk_model = absModule(attr.field.rel.to)
+                    fk_model = abs_module(attr.field.rel.to)
                     print model_name, "FK", fk_model
                     if fk_model not in self.finished_imports:
                         if fk_model in self.queued_imports:
@@ -183,23 +196,29 @@ class ImportManager:
                             else: #handle loops
                                 self.warning_list.append(model_name)
                         elif fk_model in self.import_lookup:
-                            self.process_import(fk_model,mock=mock)
+                            # had to move this outside of loop because of:
+                            # RuntimeError: dictionary changed size during iteration
+                            dependencies.append(fk_model)
                         else:
                             sys.stderr.write('WARNING: Unimplemented import template for: %s (ref:%s)\n' % (fk_model,model_name))
                             continue
-                    key_map_args[fk_model]=self.import_lookup[fk_model].key_map
+                    kargs[fk_model]=self.import_lookup[fk_model]
                 if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
-                    print model_name, "FKM2M", absModule(attr.field.rel.to)
+                    print model_name, "FKM2M", abs_module(attr.field.rel.to)
                     #TODO write this
-            if mock==False: import_instance.doImport(**key_map_args)
+            for fk_model in dependencies:
+                self.process_import(fk_model,mock=mock)
+                 
+            if mock==False: import_instance.doImport(**kargs)
             self.queued_imports.remove(model_name)
             self.finished_imports.add(model_name)
             
             #handle links to self
             if double_import:
-                key_map_args[model_name]=import_instance.key_map
-                if mock==False: import_instance.doImport(**key_map_args)
+                sys.stderr.write('NOTICE: Starting repeat import for %s to catch links to self\n' % (model_name))
+                if mock==False: import_instance.doImport(**kargs)
         except KeyError as ke:
+            traceback.print_exc()
             raise Exception("Unimplemented import template for: %s" % (model_name))
         
     def process_imports(self,import_list=[],mock=False):

@@ -21,4 +21,4 @@ if __name__== "__main__":
          importAccounts.ImportTrainee,
          importAccounts.ImportTrainingAssistant,
     ])
-    manager.process_imports(mock=True)
+    manager.process_imports(mock=False)
