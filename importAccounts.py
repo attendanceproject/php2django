@@ -120,9 +120,6 @@ class ImportUser(php2django.ImportTemplate):
             # minimum date value if lastlogin is none
             return datetime.min if row[22] is None else row[22]
 
-# Depends on User and TA, TODO the rest of dependencies. It is dependent on it
-# self which means it will require a two-pass import
-# TODO
 class ImportTrainingAssistant(php2django.ImportTemplate):
     model=TrainingAssistant
     query='SELECT * FROM trainingAssistant'
@@ -141,25 +138,18 @@ class ImportTrainingAssistant(php2django.ImportTemplate):
     """
 
     key=0
-        
-    # Optional function: Return True for rows to import.
-    #     Return False if the row should be skipped.
+    
     def row_filter(self,row,importers):
-#        if row[39] and int(row[39])==3: # remove short term part time
-#            return False
         return row[1] is not None
     
     class mapping:
         account = 1 # user_id
         active = 6
 
-# Depends on User and TA, TODO the rest of dependencies. It is dependent on it
-# self which means it will require a two-pass import
-# TODO
 class ImportTrainee(php2django.ImportTemplate):
     model=Trainee
-    #accountTypes=23 is Self Attendance
-    #residenceID=100 is Commuter
+    # accountTypes=23 is Self Attendance
+    # residenceID=100 is Commuter
     query='SELECT t.*, uat.accountTypeID IS NOT NULL as self_attendance, u.maritalStatus FROM trainee t LEFT JOIN userAccountType uat ON uat.userID=t.userID AND uat.accountTypeID=23 JOIN user u ON t.userID=u.ID and u.country<>"New Jerusalem" GROUP BY t.ID'
     """
 0  ID    int(10)
@@ -214,7 +204,7 @@ class ImportTrainee(php2django.ImportTemplate):
         account = 1 # user_id
         active = 9 # is_active
         #date_created
-        #type = -1 #('R', 'Regular (full-time)'),('S', 'Short-term (long-term)'),
+        #type ('R', 'Regular (full-time)'),('S', 'Short-term (long-term)'),
                 #('C', 'Commuter')
         def type(self,row,importers):
             if row[35] and int(row[35])==100: #residenceID=commuter
@@ -222,23 +212,21 @@ class ImportTrainee(php2django.ImportTemplate):
             if row[39] and int(row[39])==1: #traineeStatisID=Full Time
                 return 'R'
             return 'S'
-        #term = -1 #models.ManyToManyField(Term, null=True)
+        # models.ManyToManyField(Term, null=True)
         def term(self,row,importers):
             if 'terms.models.Term' in importers:
                 old_pks=[]
                 for i in [4,5,6,7]:
                     if row[i]: old_pks.append(row[i])
                 return php2django.import_m2m(importer=importers['terms.models.Term'],old_pks=old_pks)
-        #date_begin = 2
         def date_begin(self,row,importers):
             if row[3]: return row[3]
             #TODO consider using a heuristic to replace this with the first day of the first term attended
             return datetime.min
         date_end = 3
-
         TA = 17 #models.ForeignKey(TrainingAssistant, null=True, blank=True)
-        #requires second pass
-        #mentor = -1 #models.ForeignKey('self', related_name='mentee', null=True,
+        # mentor requires a second pass because it is a self link
+        # models.ForeignKey('self', related_name='mentee', null=True,
         def mentor(self,row,importers):
             if row[18]:
                 mentor_user_pk = php2django.lookup_pk(User,row[18],importers)
@@ -269,20 +257,21 @@ class ImportTrainee(php2django.ImportTemplate):
         bunk = 40 #models.ForeignKey(Bunk, null=True, blank=True)
 
         # personal information
-        #married = -1 #models.BooleanField(default=False)
+        # models.BooleanField(default=False)
         def married(self,row,importers):
             if row[43] and row[43]=='M':
                 return True
             return False
         #spouse = -1 #models.OneToOneField('self', null=True, blank=True)
-        #TODO once residences are imported check the couple field and if it is set look for another couple trainee in the same residence with the same lastname
-        
+        # TODO once residences are imported check the couple field and if it is set look for another couple trainee in the same residence with the same lastname
+                
         # refers to the user's home address, not their training residence
         # address = -1 #models.ForeignKey(Address, null=True, blank=True, verbose_name='home address')
+        # TODO
 
         # flag for trainees taking their own attendance
         # this will be false for 1st years and true for 2nd with some exceptions.
-        #self_attendance = -1 #models.BooleanField(default=False)
+        # models.BooleanField(default=False)
         def self_attendance(self,row,importers):
             if row[42]: return True
             return True if row[8]>=2 else False
