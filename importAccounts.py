@@ -58,7 +58,7 @@ class ImportUser(php2django.ImportTemplate):
     
     # Optional function: Return True for rows to import.
     #     Return False if the row should be skipped.
-    def row_filter(self,row,**kargs):
+    def row_filter(self,row,importers):
         if row[15]=='New Jerusalem': # remove short termers
             return False
         return True
@@ -79,18 +79,18 @@ class ImportUser(php2django.ImportTemplate):
         middlename=6
         maidenname=7
         date_of_birth=8
-        def gender(self,row,**kargs):
+        def gender(self,row,importers):
             if row[9]=='M':
                 return 'B' 
             if row[9]=='F':
                 return 'S'
             raise ValueError('gender: %s' % (row[9]))
         #is_active=17
-        def is_active(self,row,**kargs):
+        def is_active(self,row,importers):
             if not row[16] is None:
                 return row[16]
             return False
-        def phone(self,row,**kargs):
+        def phone(self,row,importers):
             cellPhone=row[19]
             if not cellPhone is None and cellPhone!='':
                 return cellPhone
@@ -101,11 +101,11 @@ class ImportUser(php2django.ImportTemplate):
             if not workPhone is None:
                 return workPhone
             return ''
-        def email(self,row,**kargs):
+        def email(self,row,importers):
             if not row[21] is None and validateEmail(row[21]):
                 try: #verify that this email isn't already used
-                    if row[0] in kargs['accounts.models.User'].key_map:
-                        User.objects.get(Q(email=row[21]) & ~Q(pk=kargs['accounts.models.User'].key_map[row[0]]))
+                    if row[0] in importers['accounts.models.User'].key_map:
+                        User.objects.get(Q(email=row[21]) & ~Q(pk=importers['accounts.models.User'].key_map[row[0]]))
                     else:
                         User.objects.get(Q(email=row[21]))
                 except User.DoesNotExist:
@@ -116,7 +116,7 @@ class ImportUser(php2django.ImportTemplate):
                 if validateEmail(email):
                     return email
             return '%s@noemail.com' % (row[0])
-        def last_login(self,row,**kargs):
+        def last_login(self,row,importers):
             # minimum date value if lastlogin is none
             return datetime.min if row[22] is None else row[22]
 
@@ -144,7 +144,7 @@ class ImportTrainingAssistant(php2django.ImportTemplate):
         
     # Optional function: Return True for rows to import.
     #     Return False if the row should be skipped.
-    def row_filter(self,row,**kargs):
+    def row_filter(self,row,importers):
 #        if row[39] and int(row[39])==3: # remove short term part time
 #            return False
         return row[1] is not None
@@ -216,7 +216,7 @@ class ImportTrainee(php2django.ImportTemplate):
         #date_created
         #type = -1 #('R', 'Regular (full-time)'),('S', 'Short-term (long-term)'),
                 #('C', 'Commuter')
-        def type(self,row,**kargs):
+        def type(self,row,importers):
             if row[35] and int(row[35])==100: #residenceID=commuter
                 return 'C'
             if row[39] and int(row[39])==1: #traineeStatisID=Full Time
@@ -224,7 +224,7 @@ class ImportTrainee(php2django.ImportTemplate):
             return 'S'
         #term = -1 #models.ManyToManyField(Term, null=True)
         #date_begin = 2
-        def date_begin(self,row,**kargs):
+        def date_begin(self,row,importers):
             if row[3]: return row[3]
             #TODO consider using a heuristic to replace this with the first day of the first term attended
             return datetime.min
@@ -233,9 +233,9 @@ class ImportTrainee(php2django.ImportTemplate):
         TA = 17 #models.ForeignKey(TrainingAssistant, null=True, blank=True)
         #requires second pass
         #mentor = -1 #models.ForeignKey('self', related_name='mentee', null=True,
-        def mentor(self,row,**kargs):
+        def mentor(self,row,importers):
             if row[18]:
-                mentor_user_pk = php2django.lookup_pk(User,row[18],**kargs)
+                mentor_user_pk = php2django.lookup_pk(User,row[18],importers)
                 if mentor_user_pk:
                     try:
                         ret_val = Trainee.objects.get(account__pk=mentor_user_pk)
@@ -264,7 +264,7 @@ class ImportTrainee(php2django.ImportTemplate):
 
         # personal information
         #married = -1 #models.BooleanField(default=False)
-        def married(self,row,**kargs):
+        def married(self,row,importers):
             if row[43] and row[43]=='M':
                 return True
             return False
@@ -277,7 +277,7 @@ class ImportTrainee(php2django.ImportTemplate):
         # flag for trainees taking their own attendance
         # this will be false for 1st years and true for 2nd with some exceptions.
         #self_attendance = -1 #models.BooleanField(default=False)
-        def self_attendance(self,row,**kargs):
+        def self_attendance(self,row,importers):
             if row[42]: return True
             return True if row[8]>=2 else False
             raise Exception('TODO: implement this')

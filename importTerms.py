@@ -22,14 +22,14 @@ class ImportTerm(php2django.ImportTemplate):
     key=0
     
     class mapping:
-        def season(self,row,**kargs):
+        def season(self,row,importers):
             if row[1].startswith('Spring'):
                 return 'Spring'
             if row[1].startswith('Fall'):
                 return 'Fall'
-        def year(self,row,**kargs):
+        def year(self,row,importers):
             return parse_date(row[2]).year
-        def start(self,row,**kargs):
+        def start(self,row,importers):
             return parse_date(row[2])
-        def end(self,row,**kargs):
+        def end(self,row,importers):
             return parse_date(row[3])
