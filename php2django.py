@@ -56,6 +56,28 @@ def lookup_pk(module,old_key,importers):
     except KeyError:
         return None
 
+def import_m2m(importer=None,query=None,old_pks=None,new_pks=None):
+    if old_pks is None: old_pks = []
+    if new_pks is None: new_pks = []
+    
+    if query:
+        cur.execute(query)
+        result = cur.fetchall()
+        new_pks = []
+        old_pks+=[row[0] for row in result]
+    
+    if importer:
+        for old_pk in old_pks:
+            if old_pk in importer.key_map:
+                new_pks.append(importer.key_map[old_pk])
+            else:
+                sys.stderr.write("WARNING: missing foreign key! %s (%s)\n"
+                            % (abs_module(importer.model),old_pk));
+    
+    if len(new_pks)==0: return []
+    return importer.model.objects.filter(pk__in=new_pks)
+            
+
 ignore = re.compile('^__.*__$')
 class ImportTemplate(object):
     # TODO if this is going to be used for generic migrations it should probably be converted to an abstract class
@@ -75,7 +97,7 @@ class ImportTemplate(object):
     def load_key_map(self):
         filename = self.get_pickle_file_name()
         with open(filename,'rb') as infile:
-            self.key_map = pickle.load(infile)        
+            self.key_map = pickle.load(infile)
     
     def import_row(self,row,importers):
         param = {}
@@ -157,18 +179,6 @@ class ImportTemplate(object):
             raise e
         
         self.save_key_map()
-
-class ImportManyToMany(object):
-    def __init__(self,from_model_importer,to_model_importer,query):
-        self.from_importer = from_model_importer
-        self.to_importer = to_model_importer
-        self.query=query
-
-    def doImport(self,importers):
-        cur.execute(self.query)
-        result = cur.fetchall()
-        for row in result: pass
-            #TODO
     
 class ImportManager:
     import_lookup = {}
@@ -177,7 +187,7 @@ class ImportManager:
     # these are cleared by calling process_imports
     queued_imports = set()
     # dependency loop detection
-    warning_list = []
+    warning_list = set()
 
     def build_lookup_table(self,class_list=[],skip_if_pickle=False):
         if class_list == []:
@@ -199,15 +209,19 @@ class ImportManager:
             importers[model_name]=import_instance
             dependencies=[]
             for attr in import_instance.model.__dict__.itervalues():
+                fk=False
                 if isinstance(attr,related.ReverseSingleRelatedObjectDescriptor):
                     fk_model = abs_module(attr.field.rel.to)
                     print model_name, "FK", fk_model
+                    fk=True
+                if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
+                    fk_model = abs_module(attr.field.rel.to)
+                    print model_name, "FKM2M", fk_model
+                    fk=True
+                if fk:
                     if fk_model not in self.finished_imports:
-                        if fk_model in self.queued_imports:
-                            if fk_model == model_name:
-                                double_import=True
-                            else: #handle loops
-                                self.warning_list.append(model_name)
+                        if fk_model in self.queued_imports: #handle loops
+                            self.warning_list.add(model_name)
                         elif fk_model in self.import_lookup:
                             # had to move this outside of loop because of:
                             # RuntimeError: dictionary changed size during iteration
@@ -216,27 +230,19 @@ class ImportManager:
                             sys.stderr.write('WARNING: Unimplemented import template for: %s (ref:%s)\n' % (fk_model,model_name))
                             continue
                     importers[fk_model]=self.import_lookup[fk_model]
-                if isinstance(attr,related.ReverseManyRelatedObjectsDescriptor):
-                    print model_name, "FKM2M", abs_module(attr.field.rel.to)
-                    #TODO write this
             for fk_model in dependencies:
                 self.process_import(fk_model,mock=mock)
                  
             if mock==False: import_instance.doImport(importers)
             self.queued_imports.remove(model_name)
             self.finished_imports.add(model_name)
-            
-            #handle links to self
-            if double_import:
-                sys.stderr.write('NOTICE: Starting repeat import for %s to catch links to self\n' % (model_name))
-                if mock==False: import_instance.doImport(importers)
         except KeyError as ke:
             traceback.print_exc()
             raise Exception("Unimplemented import template for: %s" % (model_name))
         
     def process_imports(self,import_list=[],mock=False):
         self.queued_imports = set()
-        self.warning_list = []
+        self.warning_list = set()
         
         if import_list==[]:
             import_list=self.import_lookup.iterkeys()
@@ -246,9 +252,10 @@ class ImportManager:
         
         #clean up the mess caused by foreign key reference loops
         for model_name in self.warning_list:
-            self.process_import(model_name,mock=mock)
+            sys.stderr.write('NOTICE: Starting repeat import for %s to handle dependency loop\n' % (model_name))
+            if mock==False: self.process_import(model_name,mock=mock)
         
-        self.warning_list = []
+        self.warning_list = set()
         
         
         

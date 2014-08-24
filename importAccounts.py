@@ -223,6 +223,12 @@ class ImportTrainee(php2django.ImportTemplate):
                 return 'R'
             return 'S'
         #term = -1 #models.ManyToManyField(Term, null=True)
+        def term(self,row,importers):
+            if 'terms.models.Term' in importers:
+                old_pks=[]
+                for i in [4,5,6,7]:
+                    if row[i]: old_pks.append(row[i])
+                return php2django.import_m2m(importer=importers['terms.models.Term'],old_pks=old_pks)
         #date_begin = 2
         def date_begin(self,row,importers):
             if row[3]: return row[3]
