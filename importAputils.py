@@ -93,13 +93,23 @@ vhcl_model_replace = (
     (re.compile('^Cobolt'),'Cobalt'),
     (re.compile('^Lesabre'),'LeSabre'),
     (re.compile('^Rav'),'RAV'),
-    (re.compile('^Crv'),'CRV'),
+    (re.compile('^Cr[-]?[vV]'),'CR-V'),
     (re.compile('^Xl7'),'XL7'),
     (re.compile('^Xd'),'xD'),
-    (re.compile('Xc90$'),'XC90'),
-    (re.compile('Se$'),'SE'),
+    (re.compile('([0-9])I$'),r"\1i"),
+    (re.compile('[Ee]s(\\s|[0-9]|$)'),r"ES\1"),
+    (re.compile('Dh$'),'DH'),
+    (re.compile('Dx$'),'DX'),
     (re.compile('Gt$'),'GT'),
+    (re.compile('Gti$'),'GTI'),
     (re.compile('Le$'),'LE'),
+    (re.compile('Lx$'),'LX'),
+    (re.compile('Is([0-9]|$)'),r"IS\1"),
+    (re.compile('Rsx$'),'RSX'),
+    (re.compile('Rx300$'),'RX300'),
+    (re.compile('Se$'),'SE'),
+    (re.compile('Sts$'),'STS'),
+    (re.compile('Xc90$'),'XC90'),
     
     )
 
@@ -180,7 +190,7 @@ class ImportVehicle(php2django.ImportTemplate):
                 if info != '': break
             if info and info=='':
                 raise Exception('No model: %s' % (info))
-            if info is None:
+            if info is None or info in ['Yes','English']:
                 return ''
             for reg, replacement in vhcl_model_replace:
                 info = re.sub(reg, replacement, info)
