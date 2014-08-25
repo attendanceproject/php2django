@@ -28,10 +28,10 @@ class ImportAddress(php2django.ImportTemplate):
         address_1 = 0 
 
 vhcl_make = re.compile('|'.join((
-    'Acura',
+    'Acura','Accra',
     'Audi',
     'Bmw',
-    'Buick',
+    'Buick','Buik',
     'Cadillac',
     'Chevrolet','Chevorlet','Chevy',
     'Chrysler',
@@ -41,7 +41,7 @@ vhcl_make = re.compile('|'.join((
     'Gmc',
     'Honda',
     'Hyundai','Hyndai',
-    'Infiniti','Infinity'
+    'Infiniti','Infinity',
     'Isuzu',
     'Jeep',
     'Kia',
@@ -67,7 +67,9 @@ vhcl_make = re.compile('|'.join((
     'Volkswagen','Vw','Volkswagon',
     )))
 vhcl_make_replace = {
+    'Accra':'Acura',
     'Bmw':'BMW',
+    'Buik':'Buick',
     'Chevy':'Chevrolet',
     'Chevorlet':'Chevrolet',
     'Gmc':'GMC',
@@ -84,8 +86,11 @@ vhcl_model_to_make = (
     ('Accord','Honda'),
     ('Camry','Toyota'),
     ('Corolla','Toyota'),
+    ('Yukon','GMC'),
+    ('Cobolt','Chevrolet'),
     )
 vhcl_model_replace = (
+    (re.compile('^Cobolt'),'Cobalt'),
     (re.compile('^Lesabre'),'LeSabre'),
     (re.compile('^Rav'),'RAV'),
     (re.compile('^Crv'),'CRV'),
@@ -149,12 +154,14 @@ class ImportVehicle(php2django.ImportTemplate):
             match = re.search(vhcl_make, info)
             if match is None:
                 for model, make in vhcl_model_to_make:
-                    if info.find(model)!=-1: return make
+                    if info.find(model)!=-1 or sanitize(row[6]).find(model)!=-1:
+                        return make
             if match:
                 make = match.group(0)
                 if make in vhcl_make_replace:
                     return vhcl_make_replace[make]
                 return make
+            sys.stderr.write('WARNING: Could not identify model for %s\n' % (str(row)))
             return '' 
     
         # e.g. "Accord", "Camry"
