@@ -49,6 +49,14 @@ def abs_module(o):
         return o.__name__
     return module + '.' + o.__name__
 
+def truncate_str(string,length):
+    if len(string)>length:
+        new_string = string[:length] 
+        sys.stderr.write('WARNING: string truncated "%s" -> "%s"\n' % (string, new_string))
+        return new_string
+    else:
+        return string
+
 def lookup_pk(module,old_key,importers):
     module_name = module if isinstance(module,str) else abs_module(module)
     try:
@@ -81,7 +89,9 @@ def import_m2m(importer=None,query=None,old_pks=None,new_pks=None):
 ignore = re.compile('^__.*__$')
 class ImportTemplate(object):
     # TODO if this is going to be used for generic migrations it should probably be converted to an abstract class
-    key_map={}
+    
+    def __init__(self):
+        self.key_map={}
     
     def row_filter(self,row,importers):
         return True
@@ -112,7 +122,7 @@ class ImportTemplate(object):
                 key = self.key(row,importers)
             else:
                 key = row[self.key]
-            if key in self.key_map:
+            if key and key in self.key_map:
                 pk = self.key_map[key]
         
         # Use the mapping attributes and functions to convert the query row into
@@ -181,23 +191,25 @@ class ImportTemplate(object):
         self.save_key_map()
     
 class ImportManager:
-    import_lookup = {}
-    finished_imports = set()
     
-    # these are cleared by calling process_imports
-    queued_imports = set()
-    # dependency loop detection
-    warning_list = set()
+    def __init__(self):
+        self.import_lookup = {}
+        self.finished_imports = set()
+        
+        # these are cleared by calling process_imports
+        self.queued_imports = set()
+        # dependency loop detection
+        self.warning_list = set()
 
-    def build_lookup_table(self,class_list=[],skip_if_pickle=False):
-        if class_list == []:
+    def build_lookup_table(self,class_list=None,skip_if_pickle=False):
+        if class_list is None:
             class_list = ImportTemplate.__subclasses__()
         for import_class in class_list:
             model_name = abs_module(import_class.model)
             import_instance = import_class()
             self.import_lookup[model_name] = import_instance 
-            if skip_if_pickle and os.path.isfile(self.get_pickle_file_name()):
-                self.load_key_map()
+            if skip_if_pickle and os.path.isfile(import_instance.get_pickle_file_name()):
+                import_instance.load_key_map()
                 self.finished_imports.add(model_name)
     
     def process_import(self,model_name,mock=False):
