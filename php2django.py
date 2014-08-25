@@ -111,6 +111,7 @@ class ImportTemplate(object):
     
     def import_row(self,row,importers):
         param = {}
+        m2m_param = {}
         pk = None
         key = None
         
@@ -131,19 +132,27 @@ class ImportTemplate(object):
             if not ignore.match(prop):
                 var = self.mapping.__dict__[prop]
                 if isinstance(var,types.FunctionType):
-                    param[prop]=var(self.mapping,row,importers)
+                    if prop in self.model.__dict__ and \
+                            isinstance(self.model.__dict__[prop],
+                            related.ReverseManyRelatedObjectsDescriptor):
+                        m2m_param[prop]=var(self.mapping,row,importers)
+                    else:
+                        param[prop]=var(self.mapping,row,importers)
                 else:
                     # if it is a foreign key use the key_map to look it up
-                    if prop in self.model.__dict__ and row[var] and \
+                    if prop in self.model.__dict__ and \
                             isinstance(self.model.__dict__[prop],
                             related.ReverseSingleRelatedObjectDescriptor):
-                        f_model = self.model.__dict__[prop].field.rel.to
-                        fk_model = abs_module(f_model)
-                        if fk_model in importers and row[var] in importers[fk_model].key_map:
-                            param[prop]=f_model.objects.get(pk=importers[fk_model].key_map[row[var]])
-                        else:
-                            sys.stderr.write("WARNING: missing foreign key! %s.%s -> %s (%s)\n"
+                        if row[var]:
+                            f_model = self.model.__dict__[prop].field.rel.to
+                            fk_model = abs_module(f_model)
+                            if fk_model in importers and row[var] in importers[fk_model].key_map:
+                                param[prop]=f_model.objects.get(pk=importers[fk_model].key_map[row[var]])
+                            else:
+                                sys.stderr.write("WARNING: missing foreign key! %s.%s -> %s (%s)\n"
                                 % (abs_module(self.model),prop,fk_model,row[var]));
+                        else:
+                            param[prop]=None
                     else:
                         param[prop]=row[var]
                     
@@ -157,10 +166,13 @@ class ImportTemplate(object):
             model_instance.save()
             if not key is None:
                 self.key_map[key]=model_instance.pk
+            if len(m2m_param)>0:
+                model_instance.__dict__.update(m2m_param)
+                model_instance.save()
         else:
             model_instance = self.model.objects.get(pk=pk)
-            for prop, value in param.iteritems():
-                model_instance.__dict__[prop]=value
+            model_instance.__dict__.update(param)
+            model_instance.__dict__.update(m2m_param)
             model_instance.save()
             
         print model_instance
