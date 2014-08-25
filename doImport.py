@@ -12,6 +12,7 @@ if __name__== "__main__":
 from php2django import php2django
 
 import importAccounts
+import importAputils
 import importTerms
 
 
@@ -21,6 +22,9 @@ if __name__== "__main__":
          importAccounts.ImportUser,
          importAccounts.ImportTrainee,
          importAccounts.ImportTrainingAssistant,
-         importTerms.ImportTerm
+         importTerms.ImportTerm,
+    ],skip_if_pickle=True)
+    manager.build_lookup_table([
+         importAputils.ImportVehicle
     ])
     manager.process_imports(mock=False)
