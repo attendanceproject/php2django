@@ -1,6 +1,6 @@
 import datetime
 
-from php2django import php2django
+import php2django
 
 from terms.models import Term
 

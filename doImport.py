@@ -6,10 +6,8 @@ import sys
 
 from datetime import datetime
 
-if __name__== "__main__":
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
-
-from php2django import php2django
+import php2django
+print sys.path
 
 import importAccounts
 import importAputils

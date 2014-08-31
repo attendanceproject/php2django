@@ -1,9 +1,9 @@
 
-from php2django import php2django
+import php2django
 
 from teams.models import Team
 
-from locality.models import Locality
+from localities.models import Locality
 
 class team_locality_lookup:
     

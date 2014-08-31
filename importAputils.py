@@ -2,7 +2,7 @@ import os
 import re
 import sys
 
-from php2django import php2django
+import php2django
 
 from aputils.models import Country, City, Address, HomeAddress, Vehicle, EmergencyInfo
 

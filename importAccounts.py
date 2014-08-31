@@ -4,7 +4,7 @@ import sys
 
 from datetime import datetime
 
-from php2django import php2django
+import php2django
 
 from accounts.models import User, Trainee, TrainingAssistant
 
