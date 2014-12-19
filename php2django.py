@@ -133,8 +133,10 @@ class ImportTemplate(object):
                 var = self.mapping.__dict__[prop]
                 if isinstance(var,types.FunctionType):
                     if prop in self.model.__dict__ and \
+                            (isinstance(self.model.__dict__[prop],
+                            related.ReverseManyRelatedObjectsDescriptor) or\
                             isinstance(self.model.__dict__[prop],
-                            related.ReverseManyRelatedObjectsDescriptor):
+                            related.ManyRelatedObjectsDescriptor)):
                         m2m_param[prop]=var(self.mapping,row,importers)
                     else:
                         param[prop]=var(self.mapping,row,importers)
@@ -186,8 +188,11 @@ class ImportTemplate(object):
             self.load_key_map()
         
         # Execute the mysql query and process the results
-        cur.execute(self.query)
-        result = cur.fetchall()
+        if isinstance(self.query,types.FunctionType):
+            result = self.query(cur)
+        else:
+            cur.execute(self.query)
+            result = cur.fetchall()
         try:
             for row in result:
                 # apply the row filter to check whether or not to import the row
