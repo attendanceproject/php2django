@@ -196,6 +196,24 @@ class ImportVehicle(php2django.ImportTemplate):
                 info = re.sub(reg, replacement, info)
             return '' if info is None else info
     
+        #year = models.PositiveSmallIntegerField()
+        def year(self,row,importers):
+            info = None
+            for index in [4,6,3,1,8]:
+                if row[index] is None: continue
+                info = sanitize(row[index])
+                match = re.search(vhcl_year, info)
+                if match is None:
+                    info=None
+                    continue
+                info = match.group(0).replace('\'','')
+                if info != '': break
+            if info and info=='':
+                raise Exception('No year: %s' % (info))
+            if info is None:
+                return '0'
+            return info
+    
         #models.CharField(max_length=10)
         def license_plate(self,row,importers):
             plate_no = str(row[7])
@@ -209,6 +227,8 @@ class ImportVehicle(php2django.ImportTemplate):
             return match.group(1)
             
         #state = models.CharField(max_length=20)
+        
+        capacity=9 
     
         #models.OneToOneField('accounts.Trainee', blank=True, null=True)
         trainee=0
