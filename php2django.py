@@ -34,7 +34,8 @@ db = MySQLdb.connect(**mysql_params) # name of the data base
 #  you execute all the queries you need
 cur = db.cursor() 
 
-from accounts.models import User, Trainee, TrainingAssistant
+from accounts.models import User
+from aputils.models import State, City, Address
 
 # from http://stackoverflow.com/a/13653312/1549171
 def abs_module_instance(o):
@@ -287,5 +288,14 @@ class ImportManager:
         self.warning_list = set()
         
         
-        
-        
+class LoadDataManager:
+    def __init__(self):
+        self.queued_data = set()
+
+    def process_load(self,model_name,params):
+        if model_name == 'city':
+            loadCity(params)
+
+    def loadCity(params):    
+        model_instance = City.objects.create(**param)
+        model_instance.save()

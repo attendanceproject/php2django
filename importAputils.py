@@ -4,7 +4,7 @@ import sys
 
 import php2django
 
-from aputils.models import Country, City, Address, HomeAddress, Vehicle, EmergencyInfo
+from aputils.models import City, Address, HomeAddress, Vehicle, EmergencyInfo
 
 # TODO
 class ImportCity(php2django.ImportTemplate):

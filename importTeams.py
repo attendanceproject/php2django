@@ -4,10 +4,19 @@ import php2django
 from teams.models import Team
 
 from localities.models import Locality
+from aputils.models import City, State
+
+import django
+django.setup()
 
 class team_locality_lookup:
     
     def do_lookup(self,index):
+        # print index
+        # for key, value in self.lookup_table.iteritems():
+        #     print value
+        #     if index in value:
+        #         return key
         return self.lookup_table[index]
     
     def __init__(self):
@@ -22,6 +31,8 @@ class team_locality_lookup:
             'Cerritos':[
                 6, #Cerritos College
                 502, #Young People - Cerritos
+                523, #Children - Cerritos
+                530, #Community
                         ],
             'Claremont':[
                 8, #Claremont College
@@ -34,13 +45,18 @@ class team_locality_lookup:
                 12, #Mount San Antonio College
                 104, #Young People - Diamond Bar
                 514, #Diamond Bar - Community    DB-COM
+                528, #Children
                            ],
+            'Eastvale':[
+                521, #Young People - Eastvale
+                    ],
             'Fullerton':[
                 2, #Cal State University Fullerton
                 10, #Fullerton College
                 105, #Young People - Fullerton
                 511, #Internet - Defense and Confirmation Project    I-DCP
                 516, #Fullerton - Community    FUL-COM
+                524, #Fullerton - Children
                          ],
             'Huntington Beach':[
                 106, #Young People - Huntington Beach
@@ -52,7 +68,12 @@ class team_locality_lookup:
                 108, #Young People - Irvine / Junior High
                 510, #Internet - Bibles for America    I-BFA
                 519, #Irvine - Community    IRV-COM
+                525, #Children
                       ],
+            'Lake Forest':[
+                531, #Lake Forest Community
+                532, #Lake Forest Children
+                    ],
             'Long Beach':[
                 503, #Long Beach
                 505, #Young People - Long Beach    YP-LB
@@ -74,6 +95,8 @@ class team_locality_lookup:
                 7, #Chapman College
                 13, #Orange Coast College
                 517, #Santiago Canyon College    SCC
+                522, #Orange - Community
+                526, #Children
                       ],
             'Riverside':[
                 518, #University of California Riverside    UCR
@@ -81,10 +104,12 @@ class team_locality_lookup:
             'San Juan Capistrano':[
                 14, #Saddleback College
                 512, #Young People - San Juan Capistrano    YP-SJC
+                529, #Children
                                    ], 
             'Santa Ana':[
                 15, #Santa Ana College
                 520, #Young People - Santa Ana    YP-SA
+                527, #Children
                          ],
             'Yorba Linda':[
                 110, #Young People - Yorba Linda
@@ -95,11 +120,13 @@ class team_locality_lookup:
             # 500    Not Assigned (Part-termer)
             }
         for city_name, old_pks in lookup_table.iteritems():
-            locality = Locality.objects.get(city__name=city_name)
-            for old_pk in old_pks:
-                self.lookup_table[old_pk] = locality
 
-team_locality_lookup_instance = None
+            city = City.objects.filter(name=city_name).first()
+            locality = Locality.objects.filter(city=city).first()
+            if not locality is None:
+                for old_pk in old_pks:
+                    self.lookup_table[old_pk] = locality
+
 
 class ImportTeam(php2django.ImportTemplate):
     model=Team
@@ -118,6 +145,12 @@ class ImportTeam(php2django.ImportTemplate):
     
     key=0
     
+    def __init__(self):
+        php2django.ImportTemplate.__init__(self)
+
+        self.create_localities()
+
+
     def row_filter(self,row,importers):
         if row[0]==500: # remove "not assigned" team
             return False
@@ -147,16 +180,73 @@ class ImportTeam(php2django.ImportTemplate):
         """
         #models.CharField(max_length=6, choices=TEAM_TYPES)
         def type(self,row,importers):
-            return True
+            if not row[3] is None:
+                if row[3] == 1:
+                    return 'CAMPUS'
+                if row[3] == 2:
+                    return 'YP'
+                if row[3] == 3:
+                    return 'CHILD'
+                if row[3] == 4:
+                    return 'COM'
+                if row[4] == 6:
+                    return 'I'
+                return ''
     
+
         # which locality this team is in
         def locality(self,row,importers): #models.ForeignKey(Locality)
             #TODO test this once the locality and city/address models are stable
-            if not team_locality_lookup_instance:
-                team_locality_lookup_instance = team_locality_lookup()
-            team_locality_lookup_instance.do_lookup(row[0])
-            return None
+            team_locality_lookup_instance = team_locality_lookup()
+            locality = team_locality_lookup_instance.do_lookup(row[0])
+            # city = City.objects.filter(name=city_name, country='US').first()
+            # locality = Locality.objects.filter(city=city).first()
+            return locality
     
+
+    def create_localities(self):
+        # returns None if CA is not created
+        state = State.objects.filter(name='CA').first()
+        if state == None:
+            state = State(name='CA')
+            state.save()
+        # first create cities
+        # city_params = [
+        #     (1, 'Anaheim', 'US', state.id),
+        #     (2, 'Cerritos', 'US', state.ID),
+        #     (3, 'Claremont', 'US', state.ID),
+        #     (4, 'Cypress', 'US', state.ID),
+        #     (5, 'Diamond Bar', 'US', state.ID),
+        #     (6, 'Fullerton', 'US', state.ID),
+        #     (7, 'Huntington Beach', 'US', state.ID),
+        #     (8, 'Irvine', 'US', state.ID),
+        #     (9, 'long Beach', 'US', state.ID),
+        #     (10, 'Los Angeles', 'US', state.ID),
+        #     (11, 'Monterey Park', 'US', state.ID),
+        #     (12, 'Ontario', 'US', state.ID),
+        #     (13, 'Orange', 'US', state.ID),
+        #     (14, 'Riverside', 'US', state.ID),
+        #     (15, 'San Juan Capistrano', 'US', state.ID),
+        #     (16, 'Santa Ana', 'US', state.ID),
+        #     (17, 'Yorba Linda', 'US', state.ID),
+        #     (18, 'Walnut', 'US', state.ID)
+        # ]
+        city_names = ['Anaheim', 'Cerritos', 'Claremont', 'Cypress',
+            'Diamond Bar', 'Eastvale', 'Fullerton', 'Huntington Beach', 'Irvine',
+            'Lake Forest', 'Long Beach', 'Los Angeles', 'Monterey Park', 'Ontario',
+            'Orange', 'Riverside', 'San Juan Capistrano', 'Santa Ana',
+            'Yorba Linda', 'Walnut'
+        ]
+        for name in city_names:
+            city_instance = City.objects.filter(name=name, state=state).first()
+            city_instance = None
+            if city_instance == None:
+                city_instance = City(name=name, state=state, country='US')
+                city_instance.save()
+            locality = Locality(city=city_instance)
+            locality.save()
+
         # opposite of subteam... relates subteams to their superteam
         # There isn't a way to import this. It will have to be added after
         # superteam = models.ForeignKey('self', blank=True, null=True)
+
