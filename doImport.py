@@ -13,7 +13,6 @@ import importAccounts
 import importAputils
 import importTerms
 import importTeams
-import importLocality
 
 
 
@@ -21,20 +20,18 @@ if __name__== "__main__":
     manager = php2django.ImportManager()
     manager.build_lookup_table([
         importTerms.ImportTerm
-    ])
+    ],skip_if_pickle=True)
     manager.build_lookup_table([
         importTeams.ImportTeam
-    ])
+    ],skip_if_pickle=True)
     manager.build_lookup_table([
          importAccounts.ImportUser
-    ])
-    # manager.build_lookup_table([
-    #      importAccounts.ImportUser,
-    #      importAccounts.ImportTrainee,
-    #      importAccounts.ImportTrainingAssistant,
-    #      importTerms.ImportTerm
-    # ],skip_if_pickle=True)
+    ],skip_if_pickle=True)
     manager.build_lookup_table([
          importAputils.ImportVehicle
-    ])
+    ],skip_if_pickle=True)
+
     manager.process_imports(mock=False)
+
+    manager.process_biblereading_import()
+    manager.process_biblebooks_import()

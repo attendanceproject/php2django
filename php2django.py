@@ -7,6 +7,7 @@ import re
 import sys
 import traceback
 import types
+import json
 
 # You should create a local.py file for your django settings in the djattendance
 # submodule.
@@ -18,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join('djattendance_repo','ap')))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_path)
 from django.conf import settings
 from django.db.models.fields import related
+from datetime import date
 
 #local_settings.py should be of the form:
 #  
@@ -36,6 +38,7 @@ cur = db.cursor()
 
 from accounts.models import User
 from aputils.models import State, City, Address
+from bible_tracker.models import BibleReading
 
 # from http://stackoverflow.com/a/13653312/1549171
 def abs_module_instance(o):
@@ -207,6 +210,47 @@ class ImportTemplate(object):
             raise e
         
         self.save_key_map()
+
+    # def doImport_biblereading(self, importers):
+    #     id_key_map = {}
+    #     filename = 'accounts.models.User.pickle'
+    #     with open(filename,'rb') as infile:
+    #         id_key_map = pickle.load(infile)
+        
+    #     # Execute the mysql query and process the results
+    #     if isinstance(self.query,types.FunctionType):
+    #         result = self.query(cur)
+    #     else:
+    #         cur.execute(self.query)
+    #         result = cur.fetchall()
+    #     try:
+    #         for row in result:
+    #             # apply the row filter to check whether or not to import the row
+    #             if self.row_filter(row,importers):
+    #                 # import the row based on self.mapping
+    #                 self.import_row_biblereading(row,importers)
+    #     # Exceptions are caught so the key_map can be saved
+    #     except Exception as e:
+    #         self.save_key_map()
+    #         traceback.print_exc()
+    #         raise e
+        
+    #     self.save_key_map() 
+
+biblebook_map = {
+        1:'1_0', 2:'1_1', 3:'1_2', 4:'1_3', 5:'1_4', 6:'1_5', 7:'1_6', 8:'1_7', 9:'1_8', 10:'1_9',
+        11:'1_10', 12:'1_11', 13:'1_12', 14:'1_13', 15:'1_14', 16:'1_15', 17:'1_16', 18:'1_17',
+        19:'1_18', 20:'1_19', 21:'1_20', 22:'1_21', 23:'1_22', 24:'1_23', 25:'1_24', 26:'1_25',
+        27:'1_26', 28:'1_27', 29:'1_28', 30:'1_29', 31:'1_30', 32:'1_31', 33:'1_32', 34:'1_33',
+        35:'1_34', 36:'1_35', 37:'1_36', 38:'1_37', 39:'1_38', 40:'1_39', 41:'1_40', 42:'1_41',
+        43:'1_42', 44:'1_43', 45:'1_44', 46:'1_45', 47:'1_46', 48:'1_47', 49:'1_48', 50:'1_49',
+        51:'1_50', 52:'1_51', 53:'1_52', 54:'1_53', 55:'1_54', 56:'1_55', 57:'1_56', 58:'1_57',
+        59:'1_58', 60:'1_59', 61:'1_60', 62:'1_61', 63:'1_62', 64:'1_63', 65:'1_64', 66:'1_65',
+        78:'2_39', 79:'2_40', 80:'2_41', 81:'2_42', 82:'2_43', 83:'2_44', 84:'2_45', 85:'2_46',
+        86:'2_47', 87:'2_48', 88:'2_49', 89:'2_50', 90:'2_51', 91:'2_52', 92:'2_53', 93:'2_54',
+        94:'2_55', 95:'2_56', 96:'2_57', 97:'2_58', 98:'2_59', 99:'2_60', 100:'2_61', 101:'2_62',
+        102:'2_63', 103:'2_64', 104:'2_65',
+    }
     
 class ImportManager:
     
@@ -263,7 +307,11 @@ class ImportManager:
             for fk_model in dependencies:
                 self.process_import(fk_model,mock=mock)
                  
-            if mock==False: import_instance.doImport(importers)
+            if mock==False: 
+                if model_name=='BibleReading':
+                    import_instance.doImport_biblereading(importers)
+                else:
+                    import_instance.doImport(importers)
             self.queued_imports.remove(model_name)
             self.finished_imports.add(model_name)
         except KeyError as ke:
@@ -286,8 +334,182 @@ class ImportManager:
             if mock==False: self.process_import(model_name,mock=mock)
         
         self.warning_list = set()
-        
-        
+
+    def process_biblebooks_import(self):
+        id_key_map = {}
+        filename = 'accounts.models.User.pickle'
+        with open(filename,'rb') as infile:
+            id_key_map = pickle.load(infile)
+
+        id_to_user_id = {}
+        query= 'SELECT * FROM trainee'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                id_to_user_id[row[0]] = row[1]
+        except Exception as e:
+            traceback.print_exc()
+            raise e
+
+        # Execute the mysql query and process the results
+        query= 'SELECT * FROM br_trainee_book'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[2] and row[2] in id_to_user_id:
+                    user_id = id_to_user_id[row[2]]
+                    if user_id in id_key_map:
+                        new_id = id_key_map[user_id]
+
+                        br = None
+                        if BibleReading.objects.filter(trainee=new_id).exists():
+                            #update
+                            br = BibleReading.objects.filter(trainee=new_id).first()
+                        else:
+                            # create
+                            trainee = User.objects.get(id=new_id)
+                            br = BibleReading(trainee=trainee, weekly_reading_status={}, books_read={}) 
+                            br.save()
+                        if not br==None:
+                            self.update_biblebooks(br, row)
+                    else:
+                        print row[2]
+                        print user_id
+                        print ''
+                else:
+                    print row[2]
+                    print ''
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+    def update_biblebooks(self, br, row):
+        if row[1]:
+            if row[1]==76 or row[1]==77:
+                return
+            else:
+                book_id = row[1]
+                book_code = biblebook_map[book_id]
+                if book_code not in br.books_read:
+                    br.books_read[book_code] = "Y"
+                    br.save()
+                            
+    def process_biblereading_import(self):
+        id_key_map = {}
+        filename = 'accounts.models.User.pickle'
+        with open(filename,'rb') as infile:
+            id_key_map = pickle.load(infile)
+
+        id_to_user_id = {}
+        query= 'SELECT * FROM trainee'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                id_to_user_id[row[0]] = row[1]
+        except Exception as e:
+            traceback.print_exc()
+            raise e        
+
+        # Execute the mysql query and process the results
+        query= 'SELECT * FROM br_daily_log'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                # apply the row filter to check whether or not to import the row
+                if not row[1]==0:
+                    if row[1] and row[1] in id_to_user_id:
+                        user_id = id_to_user_id[row[1]]
+                        if user_id in id_key_map:
+                            new_id = id_key_map[user_id]
+
+                            br = None
+                            if BibleReading.objects.filter(trainee=new_id).exists():
+                                #update
+                                br = BibleReading.objects.filter(trainee=new_id).first()
+                            else:
+                                # create
+                                trainee = User.objects.get(id=new_id)
+                            
+                                br = BibleReading(trainee=trainee, weekly_reading_status={}, books_read={}) 
+                                br.save()
+                            if not br==None:
+                                self.update_biblereading(br, row)
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+    def update_biblereading(self, br, row):
+        br_date = row[2]
+        status = row[3]
+        finalized = row[4]
+        term_week_code, mod = self.get_term_week_code(br_date)
+
+        if term_week_code not in br.weekly_reading_status:
+            br.weekly_reading_status[term_week_code] = "{\"status\": \"_______\", \"finalized\": \"N\"}"
+        json_weekly_reading = json.loads(br.weekly_reading_status[term_week_code])
+        weekly_status = json_weekly_reading['status']
+        updated_weekly_status = self.update_weekly_status(weekly_status, mod, status)
+        json_weekly_reading['status'] = updated_weekly_status
+        hstore_weekly_reading = json.dumps(json_weekly_reading)
+        br.weekly_reading_status[term_week_code] = hstore_weekly_reading
+        br.save()
+
+    def get_term_week_code(self, br_date):
+        code = ''
+        week = ''
+        mod = 0
+        month = br_date.month
+        year = br_date.year
+        if year==2016:
+            code += '20_'
+            week, mod = self.find_week(20, br_date)
+        elif year==2015 and month>=8:
+            code += '19_'
+            week, mod = self.find_week(19, br_date)
+        else:
+            code += '18_'
+            week, mod = self.find_week(18, br_date)
+        code += week
+        return code, mod
+
+    def find_week(self, term_code, br_date):
+        day_delta = 0
+        if term_code==18:
+            # start date 2/16/2015
+            start_date = date(2015,2,16)
+        if term_code==19:
+            # start date 8/10/2015
+            start_date = date(2015,8,10)
+        if term_code==20:
+            # start date 2/22/2016
+            start_date = date(2016,2,22)
+        day_delta = (br_date-start_date).days
+        week = day_delta/7
+        mod = day_delta%7
+        return str(week), mod 
+    def update_weekly_status(self, weekly_status, mod, status):
+        s = list(weekly_status)
+        if mod < len(s):
+            s[mod] = status
+            return "".join(s)
+        return weekly_status
+
 class LoadDataManager:
     def __init__(self):
         self.queued_data = set()
