@@ -137,10 +137,6 @@ class ImportUser(php2django.ImportTemplate):
     #     return the value django will use in the model instance.
     class mapping:
 
-        def __init__(self):
-            self.team_map = ImportUser.team_map
-            print 'ininininin'
-
         firstname=3
         nickname=4
         lastname=5
@@ -158,17 +154,17 @@ class ImportUser(php2django.ImportTemplate):
             if not row[16] is None:
                 return row[16]
             return False
-        def phone(self,row,importers):
-            cellPhone=row[19]
-            if not cellPhone is None and cellPhone!='':
-                return cellPhone
-            homePhone=row[18]
-            if not homePhone is None and homePhone!='':
-                return homePhone
-            workPhone=row[20]
-            if not workPhone is None:
-                return workPhone
-            return ''
+        # def phone(self,row,importers):
+        #     cellPhone=row[19]
+        #     if not cellPhone is None and cellPhone!='':
+        #         return cellPhone
+        #     homePhone=row[18]
+        #     if not homePhone is None and homePhone!='':
+        #         return homePhone
+        #     workPhone=row[20]
+        #     if not workPhone is None:
+        #         return workPhone
+        #     return ''
         def email(self,row,importers):
             if not row[21] is None and validateEmail(row[21]):
                 try: #verify that this email isn't already used
@@ -214,15 +210,28 @@ class ImportUser(php2django.ImportTemplate):
             #TODO consider using a heuristic to replace this with the first day of the first term attended
             return datetime.min
 
-        # terms_attended = 
+        # def terms_attended(self, row, importers):
+        #     user = User.objects.get(Q(email=row[21]))
+        #     if row[30] != null:
+        #         term = Term.objects.get(id=row[30])
+        #         user.terms_attended.add(term)
+        #     if row[31] != null:
+        #         term = Term.objects.get(id=row[31])
+        #         user.terms_attended.add(term)
+        #     if row[32] != null:
+        #         term = Term.objects.get(id=row[32])
+        #         user.terms_attended.add(term)                
+        #     if row[33] != null:
+        #         term = Term.objects.get(id=row[33])
+        #         user.terms_attended.add(term)
         date_end = 29
-        TA = 43
-        mentor = 44
+        # TA = 
+        # mentor = 
 
         # def team(self,row,importers):
             
 
-        # def house = 61
+        # def house = 
 
         def self_attendance(self,row,importers):
             if row[24]: return True

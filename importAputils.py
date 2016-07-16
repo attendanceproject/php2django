@@ -16,16 +16,43 @@ class ImportCity(php2django.ImportTemplate):
     class mapping:
         name = -1 
         
-# TODO
+
 class ImportAddress(php2django.ImportTemplate):
     model=Address
-    #TODO fix/write this query
-    query='SELECT streetAddress as address1, city, state, zipCode as zip_code, null as details FROM residence'
-    #key=0
+    query='SELECT * FROM residence'
+    # query='SELECT streetAddress as address1, city, state, zipCode as zip_code, null as details FROM residence'
+    """
+0    ID    int(11)
+1    name    varchar(45)
+2    residenceTypeID    
+3    capacity    int(11)
+4    streetAddress    varchar(45)
+5    city    varchar(45)
+6    state
+7    zipCode
+8    phone
+9
+10
+11   fttaUse    
+    """
+    key=0
     
+    def row_filter(self,row,importers):
+        # remove houses not for brothers/sisters/couples
+        if not row[4]:
+            return False
+        return True
+
     class mapping:
-        name = -1
-        address_1 = 0 
+
+        address1=4
+        def city(self,row,importers):
+            city = City.objects.filter(name=row[5]).first()
+            if city:
+                return city
+            else:
+                return City.objects.filter(name='Anaheim').first()
+        zip_code=7
 
 vhcl_make = re.compile('|'.join((
     'Acura','Accra',

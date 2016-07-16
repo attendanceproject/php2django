@@ -39,6 +39,9 @@ cur = db.cursor()
 from accounts.models import User
 from aputils.models import State, City, Address
 from bible_tracker.models import BibleReading
+from houses.models import House
+from teams.models import Team
+from terms.models import Term
 
 # from http://stackoverflow.com/a/13653312/1549171
 def abs_module_instance(o):
@@ -335,11 +338,149 @@ class ImportManager:
         
         self.warning_list = set()
 
-    def process_biblebooks_import(self):
+    def add_user_info(self):
+        id_team_map = {}
+        query= 'SELECT * FROM team'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[0] and row[1]:
+                    id_team_map[row[0]]= row[1]
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+        id_house_map = {}
+        query= 'SELECT * FROM residence'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[0] and row[1]:
+                    id_house_map[row[0]]= row[1]
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+        id_ta_map = {}
+        query= 'SELECT * FROM trainingAssistant'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[0] and row[2] and row[3]:
+                    id_ta_map[row[0]]= (row[2], row[3])
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+        # Add additional information to User objects
+        query='SELECT u.*, ut.accountTypeID IS NOT NULL as self_attendance, ta.userID, t.* FROM user u \
+            LEFT JOIN userAccountType ut ON u.ID=ut.userID AND ut.accountTypeID=23 \
+            LEFT JOIN trainingAssistant ta ON u.ID=ta.userID \
+            LEFT JOIN trainee t ON u.ID=t.userID \
+            GROUP BY u.ID'
+
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[15]!='New Jerusalem': # not short termer
+                    user = User.objects.filter(email=row[21]).first()
+                    if user:
+                        if row[43] and row[43] in id_ta_map: # TA information
+                            ta_ln, ta_fn = id_ta_map[row[43]]
+                            ta = User.objects.filter(firstname=ta_fn,lastname=ta_ln).first()
+                            if ta:
+                                user.TA = ta
+                                user.save()
+
+                        if row[60] and row[60] in id_team_map: # Team information
+                            team = Team.objects.filter(name=id_team_map[row[60]]).first()
+                            user.team = team
+                            user.save()
+
+                        if row[61] and row[61] in id_house_map: # House information
+                            house_name = id_house_map[row[61]]
+                            house = House.objects.filter(name=house_name).first()
+                            if house:
+                                user.house = house
+                                user.save()
+
+                        # Fill in terms_attended info
+                        if row[30]:
+                            term = Term.objects.filter(id=row[30]).first()
+                            user.terms_attended.add(term)
+                        if row[31]:
+                            term = Term.objects.filter(id=row[31]).first()
+                            user.terms_attended.add(term)
+                        if row[32]:
+                            term = Term.objects.filter(id=row[32]).first()
+                            user.terms_attended.add(term)
+                        if row[33]:
+                            term = Term.objects.filter(id=row[33]).first()
+                            user.terms_attended.add(term)
+                        user.save()
+
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+
+    def import_training_houses(self):
+        query= 'SELECT * FROM residence'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[2]==1 or row[2]==2 or row[2]==3:
+                    address = Address.objects.filter(address1=row[4], zip_code=row[7]).first()
+                    if address:
+                        gender = 'B'
+                        used = True
+                        if row[2]==2:
+                            gender = 'S'
+                        if row[2]==3:
+                            gender = 'C'
+                        if row[11]==0:
+                            used = False
+                        house = House(name=row[1], address=address, gender=gender,used=used)
+                        house.save()
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
+
+    def process_biblereading_import(self):
         id_key_map = {}
-        filename = 'accounts.models.User.pickle'
-        with open(filename,'rb') as infile:
-            id_key_map = pickle.load(infile)
+        query= 'SELECT * FROM user'
+        if isinstance(query,types.FunctionType):
+            result = query(cur)
+        else:
+            cur.execute(query)
+            result = cur.fetchall()
+        try:
+            for row in result:
+                if row[0] and row[21]:
+                    id_key_map[row[0]]= row[21]
+        except Exception as e:
+            traceback.print_exc()
+            raise e 
 
         id_to_user_id = {}
         query= 'SELECT * FROM trainee'
@@ -367,19 +508,18 @@ class ImportManager:
                 if row[2] and row[2] in id_to_user_id:
                     user_id = id_to_user_id[row[2]]
                     if user_id in id_key_map:
-                        new_id = id_key_map[user_id]
-
-                        br = None
-                        if BibleReading.objects.filter(trainee=new_id).exists():
-                            #update
-                            br = BibleReading.objects.filter(trainee=new_id).first()
-                        else:
-                            # create
-                            trainee = User.objects.get(id=new_id)
-                            br = BibleReading(trainee=trainee, weekly_reading_status={}, books_read={}) 
-                            br.save()
-                        if not br==None:
-                            self.update_biblebooks(br, row)
+                        user = User.objects.filter(email=id_key_map[user_id]).first()
+                        if user:
+                            br = None
+                            if BibleReading.objects.filter(trainee=user).exists():
+                                #update
+                                br = BibleReading.objects.filter(trainee=user).first()
+                            else:
+                                # create
+                                br = BibleReading(trainee=user, weekly_reading_status={}, books_read={}) 
+                                br.save()
+                            if br:
+                                self.update_biblebooks(br, row)
                     else:
                         print row[2]
                         print user_id
@@ -390,37 +530,6 @@ class ImportManager:
         except Exception as e:
             traceback.print_exc()
             raise e 
-
-    def update_biblebooks(self, br, row):
-        if row[1]:
-            if row[1]==76 or row[1]==77:
-                return
-            else:
-                book_id = row[1]
-                book_code = biblebook_map[book_id]
-                if book_code not in br.books_read:
-                    br.books_read[book_code] = "Y"
-                    br.save()
-                            
-    def process_biblereading_import(self):
-        id_key_map = {}
-        filename = 'accounts.models.User.pickle'
-        with open(filename,'rb') as infile:
-            id_key_map = pickle.load(infile)
-
-        id_to_user_id = {}
-        query= 'SELECT * FROM trainee'
-        if isinstance(query,types.FunctionType):
-            result = query(cur)
-        else:
-            cur.execute(query)
-            result = cur.fetchall()
-        try:
-            for row in result:
-                id_to_user_id[row[0]] = row[1]
-        except Exception as e:
-            traceback.print_exc()
-            raise e        
 
         # Execute the mysql query and process the results
         query= 'SELECT * FROM br_daily_log'
@@ -436,23 +545,32 @@ class ImportManager:
                     if row[1] and row[1] in id_to_user_id:
                         user_id = id_to_user_id[row[1]]
                         if user_id in id_key_map:
-                            new_id = id_key_map[user_id]
-
-                            br = None
-                            if BibleReading.objects.filter(trainee=new_id).exists():
-                                #update
-                                br = BibleReading.objects.filter(trainee=new_id).first()
-                            else:
-                                # create
-                                trainee = User.objects.get(id=new_id)
-                            
-                                br = BibleReading(trainee=trainee, weekly_reading_status={}, books_read={}) 
-                                br.save()
-                            if not br==None:
-                                self.update_biblereading(br, row)
+                            user = User.objects.filter(email=id_key_map[user_id]).first()
+                            if user:
+                                br = None
+                                if BibleReading.objects.filter(trainee=user).exists():
+                                    #update
+                                    br = BibleReading.objects.filter(trainee=user).first()
+                                else:
+                                    # create
+                                    br = BibleReading(trainee=user, weekly_reading_status={}, books_read={}) 
+                                    br.save()
+                                if not br==None:
+                                    self.update_biblereading(br, row)
         except Exception as e:
             traceback.print_exc()
             raise e 
+
+    def update_biblebooks(self, br, row):
+        if row[1]:
+            if row[1]==76 or row[1]==77:
+                return
+            else:
+                book_id = row[1]
+                book_code = biblebook_map[book_id]
+                if book_code not in br.books_read:
+                    br.books_read[book_code] = "Y"
+                    br.save()          
 
     def update_biblereading(self, br, row):
         br_date = row[2]
@@ -502,7 +620,8 @@ class ImportManager:
         day_delta = (br_date-start_date).days
         week = day_delta/7
         mod = day_delta%7
-        return str(week), mod 
+        return str(week), mod
+
     def update_weekly_status(self, weekly_status, mod, status):
         s = list(weekly_status)
         if mod < len(s):

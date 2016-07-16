@@ -15,23 +15,27 @@ import importTerms
 import importTeams
 
 
-
 if __name__== "__main__":
     manager = php2django.ImportManager()
-    manager.build_lookup_table([
-        importTerms.ImportTerm
-    ],skip_if_pickle=True)
-    manager.build_lookup_table([
-        importTeams.ImportTeam
-    ],skip_if_pickle=True)
-    manager.build_lookup_table([
-         importAccounts.ImportUser
-    ],skip_if_pickle=True)
-    manager.build_lookup_table([
-         importAputils.ImportVehicle
-    ],skip_if_pickle=True)
+    # manager.build_lookup_table([
+    #     importTerms.ImportTerm
+    # ],skip_if_pickle=True)
+    # manager.build_lookup_table([
+    #     importTeams.ImportTeam
+    # ],skip_if_pickle=True)
+    # manager.build_lookup_table([
+    #      importAputils.ImportAddress
+    # ],skip_if_pickle=True)
+
+    # manager.build_lookup_table([
+    #      importAccounts.ImportUser
+    # ],skip_if_pickle=True)
+    # manager.build_lookup_table([
+    #      importAputils.ImportVehicle
+    # ],skip_if_pickle=True)
 
     manager.process_imports(mock=False)
 
+    # manager.import_training_houses()
     manager.process_biblereading_import()
-    manager.process_biblebooks_import()
+    # manager.add_user_info()
